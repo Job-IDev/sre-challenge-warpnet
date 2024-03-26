@@ -1,7 +1,7 @@
 import sqlite3
 import logging
 from flask import Flask, session, redirect, url_for, request, render_template, abort
-
+import bcrypt
 
 app = Flask(__name__)
 app.secret_key = b"192b9bdd22ab9ed4d12e236c78afcb9a393ec15f71bbf5dc987d54727823bcbf"
@@ -22,16 +22,24 @@ def is_authenticated():
 
 def authenticate(username, password):
     connection = get_db_connection()
-    user = connection.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password)).fetchone()
+    user = connection.execute("SELECT password FROM users WHERE username = ?", (username,)).fetchone()
     connection.close()
 
-    if user:
+    if user and bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
         app.logger.info(f"the user '{username}' logged in successfully")
         session["username"] = username
         return True
 
     app.logger.warning(f"failed login attempt for username: '{username}'")
     abort(401)
+
+
+def register(username, password):
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    connection = get_db_connection()
+    connection.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password.decode('utf-8')))
+    connection.commit()
+    connection.close()
 
 
 @app.route("/")
